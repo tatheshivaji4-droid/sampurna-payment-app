@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0f172a">
+<title>SAMPURNA</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f7;font-family:Arial,sans-serif;color:#0f172a}
+.header{background:#0f172a;color:#fff;text-align:center;padding:25px 18px}.header h1{margin:0;font-size:32px;letter-spacing:3px}.header p{margin:6px 0 0;color:#cbd5e1}
+.card{max-width:520px;margin:22px auto;padding:22px;background:#fff;border-radius:18px;box-shadow:0 8px 30px #0001}
+label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}input{width:100%;padding:13px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px}
+button{width:100%;padding:14px;border:0;border-radius:10px;background:#0f172a;color:#fff;font-size:16px;font-weight:700;margin-top:16px}
+button.secondary{background:#e2e8f0;color:#0f172a}.hidden{display:none}
+.msg{margin-top:15px;padding:12px;border-radius:10px;text-align:center;font-weight:700}.ok{background:#dcfce7;color:#166534}.err{background:#fee2e2;color:#991b1b}.wait{background:#e2e8f0;color:#334155}
+.status{margin-top:18px;padding:14px;border-radius:12px;font-weight:700;text-align:center}.paid{background:#dcfce7;color:#166534}.processing{background:#fef3c7;color:#92400e}
+.row{display:flex;justify-content:space-between;gap:15px;padding:11px 0;border-bottom:1px solid #e2e8f0}.row b:last-child{text-align:right}
+.footer{text-align:center;color:#64748b;font-size:12px;margin:18px}
+</style>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b57d0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="SAMPURNA">
+
+</head>
+<body>
+<div class="header"><h1>SAMPURNA</h1><p>AI-Powered Accounts Assistant</p></div>
+
+<div id="loginCard" class="card">
+<h2>Vendor Login</h2>
+<label>Vendor ID</label>
+<input id="vendor" placeholder="e.g. V001" autocomplete="username">
+<label>Password</label>
+<input id="password" type="password" placeholder="Enter password" autocomplete="current-password">
+<button onclick="login()">LOGIN</button>
+<div id="loginMsg"></div>
+</div>
+
+<div id="appCard" class="card hidden">
+<h2>Payment Status</h2>
+<div id="welcome"></div>
+<label>Invoice Number</label>
+<input id="invoice" placeholder="e.g. INV-2026-00125">
+<button onclick="checkInvoice()">CHECK PAYMENT STATUS</button>
+<div id="result"></div>
+<button class="secondary" onclick="logout()">LOGOUT</button>
+</div>
+
+<div class="footer">Created by Shivaji Tathe</div>
+
+<script>
+const API="https://script.google.com/macros/s/AKfycbxq92UoNXYifPevtJ8tQHgrK0afhdZ3K76wVnIchy4EMglwy9FE7ehHJcVLHTrhu_-Q/exec";
+let sessionToken="";
+let loggedVendor="";
+
+function msg(id,text,cls){document.getElementById(id).innerHTML='<div class="msg '+cls+'">'+text+'</div>';}
+
+async function login(){
+  const vendor=document.getElementById("vendor").value.trim();
+  const password=document.getElementById("password").value;
+  if(!vendor||!password){msg("loginMsg","Enter Vendor ID and Password.","err");return;}
+  msg("loginMsg","Signing in...","wait");
+  try{
+    const r=await fetch(API+"?action=login&vendor="+encodeURIComponent(vendor)+"&password="+encodeURIComponent(password));
+    const d=await r.json();
+    if(d.status!=="SUCCESS"){msg("loginMsg",d.message||"Login failed.","err");return;}
+    sessionToken=d.token; loggedVendor=d.vendor_id;
+    document.getElementById("loginCard").classList.add("hidden");
+    document.getElementById("appCard").classList.remove("hidden");
+    document.getElementById("welcome").innerHTML="<b>Welcome, "+loggedVendor+"</b>";
+    document.getElementById("password").value="";
+  }catch(e){msg("loginMsg","Could not connect to SAMPURNA API.","err");}
+}
+
+async function checkInvoice(){
+  const invoice=document.getElementById("invoice").value.trim();
+  const result=document.getElementById("result");
+  if(!invoice){result.innerHTML='<div class="msg err">Enter Invoice Number.</div>';return;}
+  result.innerHTML='<div class="msg wait">Checking...</div>';
+  try{
+    const r=await fetch(API+"?action=invoice&invoice="+encodeURIComponent(invoice)+"&token="+encodeURIComponent(sessionToken));
+    const d=await r.json();
+    if(d.status!=="SUCCESS"){result.innerHTML='<div class="msg err">'+(d.message||"Invoice not found.")+'</div>';return;}
+    const cls=String(d.payment_status).toLowerCase()==="paid"?"paid":"processing";
+    result.innerHTML=`<div class="status ${cls}">${d.payment_status}</div>
+      <div class="row"><span>Invoice No.</span><b>${d.invoice_no}</b></div>
+      <div class="row"><span>Invoice Amount</span><b>₹${Number(d.invoice_amount||0).toLocaleString("en-IN")}</b></div>
+      <div class="row"><span>Net Payable</span><b>₹${Number(d.net_payable||0).toLocaleString("en-IN")}</b></div>
+      <div class="row"><span>Payment Date</span><b>${d.payment_date||"—"}</b></div>
+      <div class="row"><span>UTR</span><b>${d.utr_no||"—"}</b></div>`;
+  }catch(e){result.innerHTML='<div class="msg err">Could not connect to SAMPURNA API.</div>';}
+}
+
+function logout(){
+  sessionToken="";loggedVendor="";
+  document.getElementById("appCard").classList.add("hidden");
+  document.getElementById("loginCard").classList.remove("hidden");
+  document.getElementById("result").innerHTML="";
+  document.getElementById("loginMsg").innerHTML="";
+  document.getElementById("password").value="";
+}
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function(err) {
+      console.log('SAMPURNA service worker registration:', err);
+    });
+  });
+}
+</script>
+
+</body>
+</html>
